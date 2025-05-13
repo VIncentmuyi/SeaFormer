@@ -39,7 +39,7 @@ model = dict(
         num_heads=model_cfgs['num_heads'],
         drop_path_rate=model_cfgs['drop_path_rate'],
         norm_cfg=norm_cfg,
-        init_cfg=dict(type='Pretrained', checkpoint='modelzoos/classification/SeaFormer_L.pth')
+        init_cfg=dict(type='Pretrained', checkpoint='/home/yys/SeaFormer/pretrained/SeaFormer_L_bs32_43.8.pth')
     ),
     decode_head=dict(
         type='LightHead',
@@ -48,7 +48,7 @@ model = dict(
         channels=192,
         dropout_ratio=0.1,
         embed_dims=[128, 160, 192],
-        num_classes=150,
+        num_classes=3,
         is_dw=True,
         norm_cfg=norm_cfg,
         align_corners=False,

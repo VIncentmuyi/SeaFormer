@@ -1,0 +1,2 @@
+CUDA_VISIBLE_DEVICES=1 python ./tools/train.py local_configs/seaformer/seaformer_large_512x512_160k_4x8_renju.py --work-dir /home/yys/SeaFormer/save
+sh tools/dist_test.sh local_configs/seaformer/<config-file> <checkpoint-path> <num-of-gpus-to-use>
