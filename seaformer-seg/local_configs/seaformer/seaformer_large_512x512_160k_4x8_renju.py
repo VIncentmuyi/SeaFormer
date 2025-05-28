@@ -17,11 +17,6 @@ lr_config = dict(_delete_=True, policy='poly',
 
 # By default, models are trained on 8 GPUs with 2 images per GPU
 data=dict(samples_per_gpu=4)
-checkpoint_config = dict(
-    by_epoch=False,
-    interval=8000,           # 每4000次迭代保存一次checkpoint
-    save_best='mIoU',        # 根据mIoU指标保存最佳模型
-    rule='greater'           # mIoU越大越好
-)
-evaluation = dict(interval=8000, metric='mIoU', pre_eval=True)
+#checkpoint_config = dict(by_epoch=False, interval=4000)
+evaluation = dict(interval=8000, metric='mIoU', save_best='mIoU',pre_eval=True)
 find_unused_parameters=True
