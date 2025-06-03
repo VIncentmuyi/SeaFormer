@@ -10,22 +10,22 @@ from .custom import CustomDataset
 
 
 @DATASETS.register_module()
-class renjuDataset(CustomDataset):
+class floodDataset(CustomDataset):
     """LoveDA dataset.
 
     In segmentation map annotation for LoveDA, 0 is the ignore index.
     ``reduce_zero_label`` should be set to True. The ``img_suffix`` and
     ``seg_map_suffix`` are both fixed to '.png'.
     """
-    CLASSES = ('greenspace', 'road', 'building'  )
+    CLASSES = ('background', 'water', 'flood'  )
 
     PALETTE = [ [0, 255, 0], [255, 255, 0], [0, 0, 255] ]
 
     def __init__(self, **kwargs):
-        super(renjuDataset, self).__init__(
+        super(floodDataset, self).__init__(
             img_suffix='.png',
             seg_map_suffix='.png',
-            reduce_zero_label=True,
+            reduce_zero_label=False,
             **kwargs)
 
     def results2img(self, results, imgfile_prefix, indices=None):
