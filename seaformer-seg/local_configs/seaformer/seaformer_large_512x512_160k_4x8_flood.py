@@ -1,6 +1,6 @@
 _base_ = [
     '../_base_/datasets/flood.py',
-    '../_base_/default_runtime.py', '../_base_/schedules/schedule_10k.py',
+    '../_base_/default_runtime.py', '../_base_/schedules/schedule_40k.py',
     './seaformer_large.py'
 ]
 
@@ -17,6 +17,6 @@ lr_config = dict(_delete_=True, policy='poly',
 
 # By default, models are trained on 8 GPUs with 2 images per GPU
 data=dict(samples_per_gpu=4)
-#checkpoint_config = dict(by_epoch=False, interval=4000)
-evaluation = dict(interval=2000, metric='mIoU', save_best='mIoU',pre_eval=True)
+checkpoint_config = dict(by_epoch=False, interval=40000)
+evaluation = dict(interval=4000, metric='mIoU', save_best='mIoU',pre_eval=True)
 find_unused_parameters=True
