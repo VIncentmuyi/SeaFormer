@@ -1,7 +1,7 @@
 _base_ = [
     '../_base_/datasets/renju.py',
     '../_base_/default_runtime.py', '../_base_/schedules/schedule_80k.py',
-    './seaformer_large.py'
+    './seaformer_large_renju.py'
 ]
 
 optimizer = dict(_delete_=True, type='AdamW', lr=0.0005, betas=(0.9, 0.999), weight_decay=0.01,
