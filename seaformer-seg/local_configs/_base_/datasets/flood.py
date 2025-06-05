@@ -1,6 +1,7 @@
 # dataset settings
 dataset_type = 'floodDataset'
-data_root = '/home/yys/SeaFormer/data/split_by_vedio'
+#data_root = '/home/yys/SeaFormer/data/split_by_vedio'
+data_root = '/home/yys/SeaFormer/data/flood2'
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
 crop_size = (512, 512)
@@ -50,7 +51,7 @@ data = dict(
     test=dict(
         type=dataset_type,
         data_root=data_root,
-        img_dir='images/test',
-        ann_dir='labels/test',
+        img_dir='images/val',
+        ann_dir='labels/val',
         pipeline=test_pipeline))
 

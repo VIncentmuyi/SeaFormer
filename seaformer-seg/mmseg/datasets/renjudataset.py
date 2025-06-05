@@ -19,7 +19,7 @@ class renjuDataset(CustomDataset):
     """
     CLASSES = ('Background','greenspace', 'road', 'building'  )
 
-    PALETTE = [ [0, 0, 0], [0, 255, 0], [255, 255, 0], [0, 0, 255] ]
+    PALETTE = [ [0, 0, 0], [0, 255, 0], [255, 0, 0], [0, 0, 255] ]
 
     def __init__(self, **kwargs):
         super(renjuDataset, self).__init__(

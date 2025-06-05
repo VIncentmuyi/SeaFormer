@@ -19,7 +19,7 @@ class floodDataset(CustomDataset):
     """
     CLASSES = ('background', 'water', 'flood'  )
 
-    PALETTE = [ [0, 255, 0], [255, 255, 0], [0, 0, 255] ]
+    PALETTE = [ [0, 0, 0], [0, 0, 255], [255, 0, 0] ]
 
     def __init__(self, **kwargs):
         super(floodDataset, self).__init__(
