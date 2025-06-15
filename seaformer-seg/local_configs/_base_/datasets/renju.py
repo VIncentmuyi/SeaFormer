@@ -50,6 +50,6 @@ data = dict(
     test=dict(
         type=dataset_type,
         data_root=data_root,
-        img_dir='test/data',
+        img_dir='processing/tiles',
         ann_dir='test/labels',
         pipeline=test_pipeline))
