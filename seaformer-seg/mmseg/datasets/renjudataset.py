@@ -25,7 +25,7 @@ class renjuDataset(CustomDataset):
         super(renjuDataset, self).__init__(
             img_suffix='.png',
             seg_map_suffix='.png',
-            reduce_zero_label=False,
+            reduce_zero_label=True,
             **kwargs)
 
     def results2img(self, results, imgfile_prefix, indices=None):
