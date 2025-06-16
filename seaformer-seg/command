@@ -2,7 +2,7 @@ CUDA_VISIBLE_DEVICES=1 python ./tools/train.py local_configs/seaformer/seaformer
 CUDA_VISIBLE_DEVICES=1 python ./tools/test.py local_configs/seaformer/seaformer_large_512x512_160k_4x8_renju.py /home/yys/SeaFormer/save/best_mIoU_iter_64000.pth --show-dir /home/yys/SeaFormer/save/test --eval mIoU --
 CUDA_VISIBLE_DEVICES=1 python ./tools/train.py local_configs/seaformer/seaformer_large_512x512_160k_4x8_flood.py --work-dir /home/yys/SeaFormer/flood
 CUDA_VISIBLE_DEVICES=1 python ./tools/test.py local_configs/seaformer/seaformer_large_512x512_160k_4x8_flood.py /home/yys/SeaFormer/flood2/best_mIoU_iter_32000.pth --show-dir /home/yys/SeaFormer/flood2/out --eval mIoU --opacity 1
-
+CUDA_VISIBLE_DEVICES=1 python ./tools/test.py local_configs/seaformer/seaformer_large_512x512_160k_4x8_renju.py /home/yys/SeaFormer/save/best_mIoU_iter_48000.pth --show-dir /home/yys/SeaFormer/data/renju/chenzhou/out --opacity 1
 
 ps -ef | grep python
 kill -9 551867
