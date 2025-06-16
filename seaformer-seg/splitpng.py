@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-图像切分推理拼接系统
-1. 将大图切分为512x512小块
-2. 记录切分信息
-3. 推理后拼接回原图尺寸
+改进的图像切分推理拼接系统 - 避免黑边问题
+使用重叠切分策略，确保每个瓦片都是完整的512x512
 """
 
 import os
@@ -16,22 +14,62 @@ import numpy as np
 from typing import List, Tuple, Dict
 
 
-class ImageTiler:
-    def __init__(self, tile_size=512, overlap=0):
+class ImprovedImageTiler:
+    def __init__(self, tile_size=512, min_overlap=64):
         """
-        初始化图像切分器
+        改进的图像切分器 - 避免黑边问题
 
         Args:
             tile_size: 切分块大小 (默认512x512)
-            overlap: 重叠像素数 (默认0，可设置如64来减少边界效应)
+            min_overlap: 最小重叠像素数 (默认64)
         """
         self.tile_size = tile_size
-        self.overlap = overlap
-        self.stride = tile_size - overlap
+        self.min_overlap = min_overlap
+
+    def calculate_optimal_tiling(self, width: int, height: int) -> Tuple[int, int, int, int]:
+        """
+        计算最优的切分策略，确保每个瓦片都是完整的tile_size x tile_size
+
+        Args:
+            width: 图像宽度
+            height: 图像高度
+
+        Returns:
+            (tiles_x, tiles_y, stride_x, stride_y)
+        """
+        # 如果图像小于等于tile_size，直接返回1个瓦片
+        if width <= self.tile_size and height <= self.tile_size:
+            return 1, 1, self.tile_size, self.tile_size
+
+        # 计算X方向的切分
+        if width <= self.tile_size:
+            tiles_x = 1
+            stride_x = self.tile_size
+        else:
+            # 计算需要的瓦片数量
+            tiles_x = math.ceil((width - self.tile_size) / (self.tile_size - self.min_overlap)) + 1
+            # 计算实际步长
+            if tiles_x == 1:
+                stride_x = self.tile_size
+            else:
+                stride_x = (width - self.tile_size) / (tiles_x - 1)
+
+        # 计算Y方向的切分
+        if height <= self.tile_size:
+            tiles_y = 1
+            stride_y = self.tile_size
+        else:
+            tiles_y = math.ceil((height - self.tile_size) / (self.tile_size - self.min_overlap)) + 1
+            if tiles_y == 1:
+                stride_y = self.tile_size
+            else:
+                stride_y = (height - self.tile_size) / (tiles_y - 1)
+
+        return tiles_x, tiles_y, stride_x, stride_y
 
     def split_image(self, image_path: Path, output_dir: Path, image_id: str) -> Dict:
         """
-        将单个图像切分为小块
+        将单个图像切分为小块 - 改进版本，避免黑边
 
         Args:
             image_path: 输入图像路径
@@ -49,11 +87,12 @@ class ImageTiler:
                 print(f"处理图像: {image_path.name}")
                 print(f"原始尺寸: {original_width} x {original_height}")
 
-                # 计算需要的瓦片数量
-                tiles_x = math.ceil((original_width - self.overlap) / self.stride)
-                tiles_y = math.ceil((original_height - self.overlap) / self.stride)
+                # 计算最优切分策略
+                tiles_x, tiles_y, stride_x, stride_y = self.calculate_optimal_tiling(
+                    original_width, original_height)
 
-                print(f"将切分为: {tiles_x} x {tiles_y} = {tiles_x * tiles_y} 个瓦片")
+                print(f"切分策略: {tiles_x} x {tiles_y} = {tiles_x * tiles_y} 个瓦片")
+                print(f"步长: X={stride_x:.1f}, Y={stride_y:.1f}")
 
                 # 存储瓦片信息
                 tiles_info = []
@@ -61,21 +100,46 @@ class ImageTiler:
                 for row in range(tiles_y):
                     for col in range(tiles_x):
                         # 计算瓦片在原图中的位置
-                        x_start = col * self.stride
-                        y_start = row * self.stride
+                        x_start = int(col * stride_x)
+                        y_start = int(row * stride_y)
+
+                        # 确保不超出图像边界，并且瓦片大小为tile_size
                         x_end = min(x_start + self.tile_size, original_width)
                         y_end = min(y_start + self.tile_size, original_height)
+
+                        # 如果是边缘瓦片，调整起始位置以确保瓦片大小
+                        if x_end - x_start < self.tile_size:
+                            x_start = max(0, x_end - self.tile_size)
+                        if y_end - y_start < self.tile_size:
+                            y_start = max(0, y_end - self.tile_size)
 
                         # 提取瓦片
                         tile = img.crop((x_start, y_start, x_end, y_end))
 
-                        # 如果瓦片小于目标尺寸，进行填充
-                        tile_width, tile_height = tile.size
-                        if tile_width < self.tile_size or tile_height < self.tile_size:
-                            # 创建目标尺寸的黑色图像
-                            padded_tile = Image.new('RGB', (self.tile_size, self.tile_size), (0, 0, 0))
-                            # 将原瓦片粘贴到左上角
-                            padded_tile.paste(tile, (0, 0))
+                        # 记录实际提取的尺寸
+                        actual_width = x_end - x_start
+                        actual_height = y_end - y_start
+
+                        # 如果瓦片仍然小于目标尺寸（只有在图像本身小于tile_size时才会发生）
+                        needs_padding = actual_width < self.tile_size or actual_height < self.tile_size
+
+                        if needs_padding:
+                            # 创建目标尺寸的图像，使用边缘像素填充而不是黑色
+                            padded_tile = Image.new('RGB', (self.tile_size, self.tile_size))
+
+                            # 如果图像太小，使用反射填充
+                            if actual_width > 0 and actual_height > 0:
+                                # 使用镜像填充
+                                tile_array = np.array(tile)
+                                padded_array = np.pad(tile_array,
+                                                      ((0, self.tile_size - actual_height),
+                                                       (0, self.tile_size - actual_width),
+                                                       (0, 0)),
+                                                      mode='edge')
+                                padded_tile = Image.fromarray(padded_array)
+                            else:
+                                padded_tile.paste(tile, (0, 0))
+
                             tile = padded_tile
 
                         # 保存瓦片
@@ -92,9 +156,9 @@ class ImageTiler:
                             "y_start": y_start,
                             "x_end": x_end,
                             "y_end": y_end,
-                            "original_width": tile_width,
-                            "original_height": tile_height,
-                            "padded": tile_width < self.tile_size or tile_height < self.tile_size
+                            "actual_width": actual_width,
+                            "actual_height": actual_height,
+                            "needs_padding": needs_padding
                         }
                         tiles_info.append(tile_info)
 
@@ -105,10 +169,11 @@ class ImageTiler:
                     "original_width": original_width,
                     "original_height": original_height,
                     "tile_size": self.tile_size,
-                    "overlap": self.overlap,
-                    "stride": self.stride,
+                    "min_overlap": self.min_overlap,
                     "tiles_x": tiles_x,
                     "tiles_y": tiles_y,
+                    "stride_x": stride_x,
+                    "stride_y": stride_y,
                     "total_tiles": len(tiles_info),
                     "tiles": tiles_info
                 }
@@ -123,12 +188,6 @@ class ImageTiler:
                          info_file: str = "tiling_info.json"):
         """
         批量切分所有图像
-
-        Args:
-            input_dir: 输入图像目录
-            output_dir: 输出根目录
-            tiles_dir: 瓦片存储子目录名
-            info_file: 切分信息文件名
         """
         input_path = Path(input_dir)
         output_path = Path(output_dir)
@@ -179,18 +238,13 @@ class ImageTiler:
         return all_images_info
 
 
-class ImageMerger:
+class ImprovedImageMerger:
     def __init__(self):
         pass
 
     def merge_single_image(self, image_info: Dict, inference_dir: Path, output_path: Path):
         """
-        拼接单个图像的推理结果
-
-        Args:
-            image_info: 图像切分信息
-            inference_dir: 推理结果目录
-            output_path: 输出文件路径
+        改进的图像拼接 - 处理重叠区域
         """
         try:
             # 创建输出图像
@@ -201,16 +255,19 @@ class ImageMerger:
             print(f"拼接图像: {image_info['original_filename']}")
             print(f"目标尺寸: {image_info['original_width']} x {image_info['original_height']}")
 
+            # 创建权重矩阵用于处理重叠区域
+            weight_matrix = np.zeros((image_info["original_height"], image_info["original_width"]), dtype=np.float32)
+            accumulated_img = np.zeros((image_info["original_height"], image_info["original_width"], 3),
+                                       dtype=np.float32)
+
             missing_tiles = []
 
             for tile_info in image_info["tiles"]:
                 # 查找对应的推理结果
                 tile_filename = tile_info["filename"]
-                # 推理结果可能有不同的文件名格式，尝试多种可能
                 possible_names = [
                     tile_filename,
                     tile_filename.replace('.png', '_pred.png'),
-                    tile_filename.replace('.png', '.png'),
                     Path(tile_filename).stem + '.png'
                 ]
 
@@ -227,21 +284,55 @@ class ImageMerger:
 
                 # 读取推理结果
                 with Image.open(inference_tile_path) as result_tile:
-                    # 如果瓦片被填充过，需要裁剪到原始尺寸
-                    if tile_info["padded"]:
-                        result_tile = result_tile.crop((0, 0,
-                                                        tile_info["original_width"],
-                                                        tile_info["original_height"]))
+                    result_array = np.array(result_tile)
 
-                    # 粘贴到输出图像
-                    output_img.paste(result_tile, (tile_info["x_start"], tile_info["y_start"]))
+                    # 获取在原图中的位置
+                    x_start = tile_info["x_start"]
+                    y_start = tile_info["y_start"]
+                    x_end = tile_info["x_end"]
+                    y_end = tile_info["y_end"]
 
-            # 保存拼接结果
+                    # 计算实际需要使用的区域
+                    actual_width = x_end - x_start
+                    actual_height = y_end - y_start
+
+                    # 裁剪推理结果到实际尺寸
+                    cropped_result = result_array[:actual_height, :actual_width]
+
+                    # 创建权重（中心权重高，边缘权重低，用于平滑拼接）
+                    tile_weight = np.ones((actual_height, actual_width), dtype=np.float32)
+
+                    # 如果有重叠，在边缘区域使用渐变权重
+                    fade_width = min(32, actual_width // 4)  # 边缘渐变宽度
+                    fade_height = min(32, actual_height // 4)
+
+                    if fade_width > 0 and fade_height > 0:
+                        # 创建渐变权重
+                        for i in range(fade_height):
+                            tile_weight[i, :] *= (i + 1) / fade_height
+                            tile_weight[-(i + 1), :] *= (i + 1) / fade_height
+                        for j in range(fade_width):
+                            tile_weight[:, j] *= (j + 1) / fade_width
+                            tile_weight[:, -(j + 1)] *= (j + 1) / fade_width
+
+                    # 累积到结果图像
+                    accumulated_img[y_start:y_end, x_start:x_end] += cropped_result * tile_weight[:, :, np.newaxis]
+                    weight_matrix[y_start:y_end, x_start:x_end] += tile_weight
+
+            # 避免除零
+            weight_matrix[weight_matrix == 0] = 1
+
+            # 计算最终结果
+            final_result = accumulated_img / weight_matrix[:, :, np.newaxis]
+            final_result = np.clip(final_result, 0, 255).astype(np.uint8)
+
+            # 转换为PIL图像并保存
+            output_img = Image.fromarray(final_result)
             output_img.save(output_path)
 
             if missing_tiles:
                 print(f"⚠️ 缺少 {len(missing_tiles)} 个瓦片的推理结果")
-                for tile in missing_tiles[:5]:  # 只显示前5个
+                for tile in missing_tiles[:5]:
                     print(f"   - {tile}")
                 if len(missing_tiles) > 5:
                     print(f"   ... 还有 {len(missing_tiles) - 5} 个")
@@ -255,15 +346,7 @@ class ImageMerger:
             return False
 
     def merge_all_images(self, tiling_info_file: str, inference_dir: str, output_dir: str):
-        """
-        批量拼接所有图像的推理结果
-
-        Args:
-            tiling_info_file: 切分信息文件路径
-            inference_dir: 推理结果目录
-            output_dir: 输出目录
-        """
-        # 读取切分信息
+        """批量拼接所有图像的推理结果"""
         try:
             with open(tiling_info_file, 'r', encoding='utf-8') as f:
                 all_images_info = json.load(f)
@@ -284,7 +367,6 @@ class ImageMerger:
         for i, image_info in enumerate(all_images_info):
             print(f"\n[{i + 1}/{len(all_images_info)}] ", end="")
 
-            # 生成输出文件名
             original_name = Path(image_info["original_filename"]).stem
             output_filename = f"{original_name}_merged.png"
             output_file_path = output_path / output_filename
@@ -298,125 +380,25 @@ class ImageMerger:
         print(f"   输出目录: {output_dir}")
 
 
-def main():
-    print("🚀 图像切分推理拼接系统")
-    print("=" * 50)
+# 使用示例
+def demo_usage():
+    """演示如何使用改进的切分器"""
 
-    print("选择操作:")
-    print("1. 切分图像 (推理前)")
-    print("2. 拼接结果 (推理后)")
-    print("3. 完整流程演示")
+    # 创建改进的切分器
+    tiler = ImprovedImageTiler(tile_size=512, min_overlap=64)
 
-    choice = input("\n请选择操作 (1/2/3): ").strip()
+    # 切分图像
+    input_dir = "path/to/input/images"
+    output_dir = "path/to/output"
+    tiler.split_all_images(input_dir, output_dir)
 
-    if choice == "1":
-        # 切分图像
-        print("\n📸 图像切分模式")
-
-        input_dir = input("请输入原图目录路径: ").strip()
-        if not input_dir:
-            input_dir = "/home/yys/SeaFormer/data/renju/chenzhou/test"
-
-        output_dir = input("请输入输出目录路径: ").strip()
-        if not output_dir:
-            output_dir = "/home/yys/SeaFormer/data/renju/chenzhou/processing"
-
-        tile_size = input("请输入瓦片尺寸 (默认512): ").strip()
-        tile_size = int(tile_size) if tile_size else 512
-
-        overlap = input("请输入重叠像素数 (默认0): ").strip()
-        overlap = int(overlap) if overlap else 0
-
-        print(f"\n📂 输入目录: {input_dir}")
-        print(f"📁 输出目录: {output_dir}")
-        print(f"📐 瓦片尺寸: {tile_size}x{tile_size}")
-        print(f"🔗 重叠像素: {overlap}")
-
-        confirm = input("\n开始切分？(y/n): ").strip().lower()
-        if confirm == 'y':
-            tiler = ImageTiler(tile_size=tile_size, overlap=overlap)
-            tiler.split_all_images(input_dir, output_dir)
-
-    elif choice == "2":
-        # 拼接结果
-        print("\n🧩 结果拼接模式")
-
-        info_file = input("请输入切分信息文件路径: ").strip()
-        if not info_file:
-            info_file = "/home/yys/SeaFormer/data/renju/chenzhou/processing/tiling_info.json"
-
-        inference_dir = input("请输入推理结果目录路径: ").strip()
-        if not inference_dir:
-            inference_dir = "/home/yys/SeaFormer/data/renju/chenzhou/out"
-
-        output_dir = input("请输入拼接输出目录路径: ").strip()
-        if not output_dir:
-            output_dir = "/home/yys/SeaFormer/data/renju/chenzhou/merged"
-
-        print(f"\n📄 切分信息: {info_file}")
-        print(f"📂 推理结果: {inference_dir}")
-        print(f"📁 输出目录: {output_dir}")
-
-        confirm = input("\n开始拼接？(y/n): ").strip().lower()
-        if confirm == 'y':
-            merger = ImageMerger()
-            merger.merge_all_images(info_file, inference_dir, output_dir)
-
-    elif choice == "3":
-        # 完整流程演示
-        print("\n🔄 完整流程演示")
-        print("步骤1: 切分图像")
-        print("步骤2: 运行推理命令")
-        print("步骤3: 拼接结果")
-
-        # 设置默认路径
-        test_dir = "/home/yys/SeaFormer/data/renju/chenzhou/test/data"
-        processing_dir = "/home/yys/SeaFormer/data/renju/chenzhou/processing"
-        out_dir = "/home/yys/SeaFormer/data/renju/chenzhou/out"
-        merged_dir = "/home/yys/SeaFormer/data/renju/chenzhou/merged"
-
-        print(f"\n默认路径配置:")
-        print(f"原图目录: {test_dir}")
-        print(f"处理目录: {processing_dir}")
-        print(f"推理输出: {out_dir}")
-        print(f"拼接输出: {merged_dir}")
-
-        print(f"\n推理命令 (步骤2需要手动执行):")
-        print(f"CUDA_VISIBLE_DEVICES=1 python ./tools/test.py \\")
-        print(f"    local_configs/seaformer/seaformer_large_512x512_160k_4x8_renju.py \\")
-        print(f"    /home/yys/SeaFormer/save/best_mIoU_iter_48000.pth \\")
-        print(f"    --show-dir {out_dir} \\")
-        print(f"    --opacity 1")
-
-        confirm = input(f"\n使用默认配置开始处理？(y/n): ").strip().lower()
-        if confirm == 'y':
-            # 步骤1: 切分
-            print(f"\n🔄 步骤1: 切分图像...")
-            tiler = ImageTiler(tile_size=512, overlap=0)
-            tiler.split_all_images(test_dir, processing_dir)
-
-            print(f"\n✅ 步骤1完成！")
-            print(f"\n🔄 请手动执行步骤2 (推理):")
-            print(f"cd /home/yys/SeaFormer")
-            print(f"CUDA_VISIBLE_DEVICES=1 python ./tools/test.py \\")
-            print(f"    local_configs/seaformer/seaformer_large_512x512_160k_4x8_renju.py \\")
-            print(f"    /home/yys/SeaFormer/save/best_mIoU_iter_48000.pth \\")
-            print(f"    --show-dir {out_dir} \\")
-            print(f"    --opacity 1")
-
-            input(f"\n推理完成后按回车继续拼接...")
-
-            # 步骤3: 拼接
-            print(f"\n🔄 步骤3: 拼接结果...")
-            merger = ImageMerger()
-            info_file = f"{processing_dir}/tiling_info.json"
-            merger.merge_all_images(info_file, out_dir, merged_dir)
-
-            print(f"\n🎉 完整流程完成!")
-
-    else:
-        print("❌ 无效选择")
+    # 推理完成后，使用改进的拼接器
+    merger = ImprovedImageMerger()
+    info_file = f"{output_dir}/tiling_info.json"
+    inference_dir = "path/to/inference/results"
+    merged_dir = "path/to/merged/results"
+    merger.merge_all_images(info_file, inference_dir, merged_dir)
 
 
 if __name__ == "__main__":
-    main()
+    demo_usage()
